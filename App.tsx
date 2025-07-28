@@ -37,6 +37,23 @@ import LocationSettingsScreen from './screens/customer/LocationSettingsScreen';
 import FavoriteStylists from './screens/customer/FavoriteStylists';
 import ReviewsRatingsScreen from './screens/customer/ReviewsRatingsScreen';
 
+// New Customer Screens
+import ChatScreen from './screens/customer/ChatScreen';
+import StylistDetailScreen from './screens/customer/StylistDetailScreen';
+import ServiceSelectionScreen from './screens/customer/ServiceSelectionScreen';
+import BookingDetailsScreen from './screens/customer/BookingDetailsScreen';
+import TimeSlotSelectionScreen from './screens/customer/TimeSlotSelectionScreen';
+import BookingConfirmationScreen from './screens/customer/BookingConfirmationScreen';
+import WriteReviewScreen from './screens/customer/WriteReviewScreen';
+import ReviewDetailScreen from './screens/customer/ReviewDetailScreen';
+import NotificationCenterScreen from './screens/customer/NotificationCenterScreen';
+import AdvancedFiltersScreen from './screens/customer/AdvancedFiltersScreen';
+
+// New Stylist Screens
+import ServiceManagementScreen from './screens/stylist/ServiceManagementScreen';
+import AvailabilityManagementScreen from './screens/stylist/AvailabilityManagementScreen';
+import StylistSettingsScreen from './screens/stylist/StylistSettingsScreen';
+
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
@@ -73,6 +90,24 @@ function StylistTabNavigator() {
       <Tab.Screen name="Messages" component={StylistMessagesScreen} />
       <Tab.Screen name="Profile" component={StylistProfileScreen} />
     </Tab.Navigator>
+  );
+}
+
+// Stylist Stack Navigator (includes sub-screens)
+function StylistStackNavigator() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="StylistTabs" component={StylistTabNavigator} />
+      
+      {/* Stylist Management Screens */}
+      <Stack.Screen name="ServiceManagement" component={ServiceManagementScreen} />
+      <Stack.Screen name="AvailabilityManagement" component={AvailabilityManagementScreen} />
+      <Stack.Screen name="StylistSettings" component={StylistSettingsScreen} />
+      
+      {/* Shared Screens (accessible by stylists too) */}
+      <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="NotificationCenter" component={NotificationCenterScreen} />
+    </Stack.Navigator>
   );
 }
 
@@ -120,11 +155,25 @@ function CustomerStackNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="CustomerTabs" component={CustomerTabNavigator} />
+      
+      {/* Profile Sub-screens */}
       <Stack.Screen name="PersonalInfo" component={PersonalInfoScreen} />
       <Stack.Screen name="ContactInfo" component={ContactInfoScreen} />
       <Stack.Screen name="LocationSettings" component={LocationSettingsScreen} />
       <Stack.Screen name="FavoriteStylists" component={FavoriteStylists} />
       <Stack.Screen name="ReviewsRatings" component={ReviewsRatingsScreen} />
+      
+      {/* Main App Screens */}
+      <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="StylistDetail" component={StylistDetailScreen} />
+      <Stack.Screen name="ServiceSelection" component={ServiceSelectionScreen} />
+      <Stack.Screen name="BookingDetails" component={BookingDetailsScreen} />
+      <Stack.Screen name="TimeSlotSelection" component={TimeSlotSelectionScreen} />
+      <Stack.Screen name="BookingConfirmation" component={BookingConfirmationScreen} />
+      <Stack.Screen name="WriteReview" component={WriteReviewScreen} />
+      <Stack.Screen name="ReviewDetail" component={ReviewDetailScreen} />
+      <Stack.Screen name="NotificationCenter" component={NotificationCenterScreen} />
+      <Stack.Screen name="AdvancedFilters" component={AdvancedFiltersScreen} />
     </Stack.Navigator>
   );
 }
@@ -157,7 +206,7 @@ function RootStackNavigator() {
     return <AuthNavigator />;
   }
 
-  return user?.role === 'stylist' ? <StylistTabNavigator /> : <CustomerStackNavigator />;
+  return user?.role === 'stylist' ? <StylistStackNavigator /> : <CustomerStackNavigator />;
 }
 
 export default function App() {

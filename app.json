@@ -21,7 +21,12 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "BraidR uses your location to find nearby braiding stylists and calculate distances.",
         "NSCameraUsageDescription": "BraidR needs camera access to let you upload photos of your work and profile pictures.",
-        "NSPhotoLibraryUsageDescription": "BraidR needs photo library access to let you select images for your profile and service gallery."
+        "NSPhotoLibraryUsageDescription": "BraidR needs photo library access to let you select images for your profile and service gallery.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location.",
+        "NSLocationAlwaysUsageDescription": "Allow $(PRODUCT_NAME) to use your location.",
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -36,7 +41,10 @@
         "ACCESS_COARSE_LOCATION",
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
       ]
     },
     "web": {
@@ -44,7 +52,15 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-location",
+      [
+        "expo-location",
+        {
+          "isAndroidForegroundServiceEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+        }
+      ],
       "expo-camera"
     ],
     "extra": {

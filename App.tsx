@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Toaster } from 'sonner-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './utils/supabase';
 
 // Auth
 import { AuthProvider, useAuth } from './contexts/AuthContext';

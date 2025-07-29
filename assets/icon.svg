@@ -1,0 +1,9 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- BraidR App Icon - Replace with actual design -->
+  <rect width="1024" height="1024" rx="180" fill="#8B5CF6"/>
+  <circle cx="512" cy="400" r="120" fill="#F3E8FF"/>
+  <path d="M400 500 Q450 520 500 500 Q550 520 600 500 Q550 540 500 520 Q450 540 400 500" fill="#A855F7" stroke="#7C3AED" stroke-width="4"/>
+  <path d="M420 520 Q470 540 520 520 Q570 540 620 520 Q570 560 520 540 Q470 560 420 520" fill="#A855F7" stroke="#7C3AED" stroke-width="4"/>
+  <path d="M440 540 Q490 560 540 540 Q590 560 640 540 Q590 580 540 560 Q490 580 440 540" fill="#A855F7" stroke="#7C3AED" stroke-width="4"/>
+  <text x="512" y="700" font-family="Arial, sans-serif" font-size="80" font-weight="bold" text-anchor="middle" fill="white">BraidR</text>
+</svg>

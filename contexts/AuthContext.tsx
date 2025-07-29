@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiService, User, AuthTokens } from '../src/services/api';
+import { supabase } from '../utils/supabase';
+import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 
 interface AuthUser {
   id: string;
@@ -11,6 +12,7 @@ interface AuthUser {
   lastName: string;
   isEmailVerified: boolean;
   avatar?: string;
+  supabaseUser?: SupabaseUser;
 }
 
 interface AuthContextType {
@@ -50,35 +52,95 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     checkAuthState();
+    
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id);
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          // User signed in, fetch their profile
+          const { data: userProfile, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (!error && userProfile) {
+            const userData: AuthUser = {
+              id: userProfile.id,
+              fullName: `${userProfile.first_name} ${userProfile.last_name}`,
+              email: userProfile.email,
+              role: userProfile.role,
+              firstName: userProfile.first_name,
+              lastName: userProfile.last_name,
+              isEmailVerified: userProfile.is_email_verified,
+              avatar: userProfile.avatar,
+              supabaseUser: session.user,
+            };
+            setUser(userData);
+            await AsyncStorage.setItem('user', JSON.stringify(userData));
+          }
+        } else if (event === 'SIGNED_OUT') {
+          // User signed out
+          setUser(null);
+          await AsyncStorage.removeItem('user');
+        }
+      }
+    );
+    
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const checkAuthState = async () => {
     try {
-      const tokens = await AsyncStorage.getItem('authTokens');
-      if (tokens) {
-        // Try to get user profile with stored token
-        const response = await apiService.getProfile();
-        if (response.success && response.data) {
+      // Get current session from Supabase
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Error getting session:', error);
+        setUser(null);
+        return;
+      }
+      
+      if (session?.user) {
+        // Get user profile from our users table
+        const { data: userProfile, error: profileError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (profileError) {
+          console.error('Error fetching user profile:', profileError);
+          setUser(null);
+          return;
+        }
+        
+        if (userProfile) {
           const userData: AuthUser = {
-            id: response.data.id,
-            fullName: `${response.data.firstName} ${response.data.lastName}`,
-            email: response.data.email,
-            role: response.data.role,
-            firstName: response.data.firstName,
-            lastName: response.data.lastName,
-            isEmailVerified: response.data.isEmailVerified,
-            avatar: response.data.avatar,
+            id: userProfile.id,
+            fullName: `${userProfile.first_name} ${userProfile.last_name}`,
+            email: userProfile.email,
+            role: userProfile.role,
+            firstName: userProfile.first_name,
+            lastName: userProfile.last_name,
+            isEmailVerified: userProfile.is_email_verified,
+            avatar: userProfile.avatar,
+            supabaseUser: session.user,
           };
           setUser(userData);
-        } else {
-          // Token is invalid, clear storage
-          await AsyncStorage.multiRemove(['authTokens', 'user', 'needsOnboarding']);
+          await AsyncStorage.setItem('user', JSON.stringify(userData));
         }
+      } else {
+        setUser(null);
+        await AsyncStorage.removeItem('user');
       }
     } catch (error) {
       console.error('Error checking auth state:', error);
-      // Clear invalid tokens
-      await AsyncStorage.multiRemove(['authTokens', 'user', 'needsOnboarding']);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -88,31 +150,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      const response = await apiService.login(email, password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to sign in');
+      if (error) {
+        throw new Error(error.message);
       }
       
-      if (response.data) {
-        // Validate that the user's role matches the selected role
-        if (response.data.user.role !== role) {
-          throw new Error(`Invalid role. Please sign in as a ${response.data.user.role}.`);
+      if (data.user) {
+        // Get user profile from our users table
+        const { data: userProfile, error: profileError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+        
+        if (profileError) {
+          throw new Error('Failed to fetch user profile');
         }
         
-        // Store tokens
-        await AsyncStorage.setItem('authTokens', JSON.stringify(response.data.tokens));
+        // Validate that the user's role matches the selected role
+        if (userProfile.role !== role) {
+          throw new Error(`Invalid role. Please sign in as a ${userProfile.role}.`);
+        }
         
-        // Create user data
         const userData: AuthUser = {
-          id: response.data.user.id,
-          fullName: `${response.data.user.firstName} ${response.data.user.lastName}`,
-          email: response.data.user.email,
-          role: response.data.user.role,
-          firstName: response.data.user.firstName,
-          lastName: response.data.user.lastName,
-          isEmailVerified: response.data.user.isEmailVerified,
-          avatar: response.data.user.avatar,
+          id: userProfile.id,
+          fullName: `${userProfile.first_name} ${userProfile.last_name}`,
+          email: userProfile.email,
+          role: userProfile.role,
+          firstName: userProfile.first_name,
+          lastName: userProfile.last_name,
+          isEmailVerified: userProfile.is_email_verified,
+          avatar: userProfile.avatar,
+          supabaseUser: data.user,
         };
         
         await AsyncStorage.setItem('user', JSON.stringify(userData));
@@ -132,38 +205,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     email: string;
     password: string;
     role: 'customer' | 'stylist';
+    phone?: string;
   }) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      
-      const registerData = {
-        firstName: userData.firstName,
-        lastName: userData.lastName,
+      // Sign up with Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password,
-        userType: userData.role,
-      };
+      });
       
-      const response = await apiService.register(registerData);
-      
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to create account');
+      if (error) {
+        throw new Error(error.message);
       }
       
-      if (response.data) {
-        // Store tokens
-        await AsyncStorage.setItem('authTokens', JSON.stringify(response.data.tokens));
+      if (data.user) {
+        // Create user profile in our users table
+        const { data: userProfile, error: profileError } = await supabase
+          .from('users')
+          .insert({
+            id: data.user.id,
+            email: userData.email,
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            role: userData.role,
+            phone: userData.phone,
+            is_email_verified: false,
+            is_active: true,
+          })
+          .select()
+          .single();
         
-        // Create user data
+        if (profileError) {
+          throw new Error('Failed to create user profile');
+        }
+        
         const newUser: AuthUser = {
-          id: response.data.user.id,
-          fullName: `${response.data.user.firstName} ${response.data.user.lastName}`,
-          email: response.data.user.email,
-          role: response.data.user.role,
-          firstName: response.data.user.firstName,
-          lastName: response.data.user.lastName,
-          isEmailVerified: response.data.user.isEmailVerified,
-          avatar: response.data.user.avatar,
+          id: userProfile.id,
+          fullName: `${userProfile.first_name} ${userProfile.last_name}`,
+          email: userProfile.email,
+          role: userProfile.role,
+          firstName: userProfile.first_name,
+          lastName: userProfile.last_name,
+          isEmailVerified: userProfile.is_email_verified,
+          avatar: userProfile.avatar,
+          supabaseUser: data.user,
         };
         
         await AsyncStorage.setItem('user', JSON.stringify(newUser));
@@ -180,16 +266,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     try {
-      // Call logout endpoint
-      await apiService.logout();
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Supabase sign out error:', error);
+      }
       
       // Clear local storage
-      await AsyncStorage.multiRemove(['user', 'needsOnboarding', 'authTokens']);
+      await AsyncStorage.multiRemove(['user', 'needsOnboarding']);
       setUser(null);
     } catch (error) {
       console.error('Sign out error:', error);
-      // Even if API call fails, clear local data
-      await AsyncStorage.multiRemove(['user', 'needsOnboarding', 'authTokens']);
+      // Even if sign out fails, clear local data
+      await AsyncStorage.multiRemove(['user', 'needsOnboarding']);
       setUser(null);
     }
   };
@@ -204,20 +294,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshUserProfile = async () => {
     try {
-      const response = await apiService.getProfile();
-      if (response.success && response.data) {
-        const userData: AuthUser = {
-          id: response.data.id,
-          fullName: `${response.data.firstName} ${response.data.lastName}`,
-          email: response.data.email,
-          role: response.data.role,
-          firstName: response.data.firstName,
-          lastName: response.data.lastName,
-          isEmailVerified: response.data.isEmailVerified,
-          avatar: response.data.avatar,
-        };
-        setUser(userData);
-        await AsyncStorage.setItem('user', JSON.stringify(userData));
+      const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+      
+      if (supabaseUser) {
+        const { data: userProfile, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', supabaseUser.id)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching user profile:', error);
+          return;
+        }
+        
+        if (userProfile) {
+          const userData: AuthUser = {
+            id: userProfile.id,
+            fullName: `${userProfile.first_name} ${userProfile.last_name}`,
+            email: userProfile.email,
+            role: userProfile.role,
+            firstName: userProfile.first_name,
+            lastName: userProfile.last_name,
+            isEmailVerified: userProfile.is_email_verified,
+            avatar: userProfile.avatar,
+            supabaseUser,
+          };
+          setUser(userData);
+          await AsyncStorage.setItem('user', JSON.stringify(userData));
+        }
       }
     } catch (error) {
       console.error('Error refreshing user profile:', error);

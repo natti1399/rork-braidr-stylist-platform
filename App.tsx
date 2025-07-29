@@ -6,7 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Toaster } from 'sonner-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { supabase } from './utils/supabase';
+import { trpc, trpcClient } from './lib/trpc';
 
 // Auth
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -210,15 +212,22 @@ function RootStackNavigator() {
   return user?.role === 'stylist' ? <StylistStackNavigator /> : <CustomerStackNavigator />;
 }
 
+// Create a query client
+const queryClient = new QueryClient();
+
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <NavigationContainer>
-          <RootStackNavigator />
-        </NavigationContainer>
-        <Toaster />
-      </AuthProvider>
+      <trpc.Provider client={trpcClient} queryClient={queryClient}>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <NavigationContainer>
+              <RootStackNavigator />
+            </NavigationContainer>
+            <Toaster />
+          </AuthProvider>
+        </QueryClientProvider>
+      </trpc.Provider>
     </SafeAreaProvider>
   );
 }

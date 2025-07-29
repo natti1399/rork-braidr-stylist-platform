@@ -15,7 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { bookingService, type Stylist, type Service } from '../src/services/bookingService';
+import { bookingService, type Stylist, type Service } from '../../src/services/bookingService';
 
 interface RouteParams {
   stylistId: string;
@@ -50,13 +50,13 @@ export default function BookingConfirmationScreen() {
       setLoading(true);
       
       // Load stylist details
-      const stylistResponse = await bookingService.getStylistById(stylistId);
+      const stylistResponse = await bookingService.getStylistDetails(stylistId);
       if (stylistResponse.success && stylistResponse.data) {
         setStylist(stylistResponse.data);
       }
 
       // Load selected services details
-      const allServices = await bookingService.getServicesByStylist(stylistId);
+      const allServices = await bookingService.getStylistServices(stylistId);
       if (allServices.success && allServices.data) {
         const selectedServiceDetails = allServices.data.filter(service => 
           selectedServices.some(selected => selected.serviceId === service.id)
@@ -113,11 +113,18 @@ export default function BookingConfirmationScreen() {
               
               const bookingRequest = {
                 stylistId,
-                services: selectedServices,
-                date: selectedDate,
-                time: selectedTime,
-                totalPrice: calculateTotal(),
-                notes: ''
+                serviceId: selectedServices[0]?.serviceId || '',
+                appointmentDate: selectedDate,
+                startTime: selectedTime,
+                location: {
+                  address: stylist?.location?.address || '',
+                  city: stylist?.location?.city || '',
+                  state: stylist?.location?.state || '',
+                  zipCode: stylist?.location?.zipCode || ''
+                },
+                contactNumber: '',
+                addOns: selectedServices.flatMap(s => s.addOns || []),
+                specialRequests: ''
               };
               
               const response = await bookingService.createBooking(bookingRequest);
@@ -140,11 +147,8 @@ export default function BookingConfirmationScreen() {
   };
 
   const handleCallStylist = () => {
-    if (stylist?.phone) {
-      Linking.openURL(`tel:${stylist.phone}`);
-    } else {
-      Alert.alert('Contact Info', 'Phone number not available');
-    }
+    // Phone number would come from user profile, not stylist profile
+    Alert.alert('Contact Info', 'Phone number not available');
   };
 
   const handleMessageStylist = () => {
@@ -152,7 +156,7 @@ export default function BookingConfirmationScreen() {
     navigation.navigate('Chat', { 
       conversationId: stylistId,
       stylistName: displayName,
-      stylistAvatar: stylist?.profileImage
+      stylistAvatar: stylist?.portfolio?.[0]
     });
   };
 
@@ -209,7 +213,7 @@ export default function BookingConfirmationScreen() {
             <Ionicons name="location" size={20} color="#4267FF" />
             <View style={styles.appointmentText}>
               <Text style={styles.appointmentLabel}>Location</Text>
-              <Text style={styles.appointmentValue}>{location}</Text>
+              <Text style={styles.appointmentValue}>{stylist?.location?.address || 'Location TBD'}</Text>
             </View>
           </View>
 
@@ -217,7 +221,7 @@ export default function BookingConfirmationScreen() {
             <Ionicons name="time" size={20} color="#4267FF" />
             <View style={styles.appointmentText}>
               <Text style={styles.appointmentLabel}>Duration</Text>
-              <Text style={styles.appointmentValue}>{serviceDuration}</Text>
+              <Text style={styles.appointmentValue}>{bookingService.formatDuration(calculateDuration())}</Text>
             </View>
           </View>
 
@@ -225,7 +229,7 @@ export default function BookingConfirmationScreen() {
             <Ionicons name="card" size={20} color="#4267FF" />
             <View style={styles.appointmentText}>
               <Text style={styles.appointmentLabel}>Total Cost</Text>
-              <Text style={styles.appointmentValue}>${totalPrice} (Pay in person)</Text>
+              <Text style={styles.appointmentValue}>${calculateTotal()} (Pay in person)</Text>
             </View>
           </View>
         </View>
@@ -235,8 +239,8 @@ export default function BookingConfirmationScreen() {
       <View style={styles.stylistCard}>
         <Text style={styles.cardTitle}>Your Stylist</Text>
         <View style={styles.stylistInfo}>
-          {stylist?.profileImage ? (
-            <Image source={{ uri: stylist.profileImage }} style={styles.stylistAvatar} />
+          {stylist?.portfolio?.[0] ? (
+            <Image source={{ uri: stylist.portfolio[0] }} style={styles.stylistAvatar} />
           ) : (
             <View style={[styles.stylistAvatar, styles.avatarPlaceholder]}>
               <Text style={styles.avatarText}>
@@ -252,7 +256,7 @@ export default function BookingConfirmationScreen() {
               <Ionicons name="star" size={16} color="#FFD700" />
               <Text style={styles.ratingText}>{stylist?.rating || 5.0} ({stylist?.reviewCount || 0} reviews)</Text>
             </View>
-            <Text style={styles.stylistLocation}>{stylist?.location || 'Location not specified'}</Text>
+            <Text style={styles.stylistLocation}>{stylist?.location?.address || 'Location not specified'}</Text>
           </View>
         </View>
       </View>
@@ -313,8 +317,8 @@ export default function BookingConfirmationScreen() {
         
         {/* Stylist Info */}
         <View style={styles.stylistSummary}>
-          {stylist?.profileImage ? (
-            <Image source={{ uri: stylist.profileImage }} style={styles.stylistAvatar} />
+          {stylist?.portfolio?.[0] ? (
+            <Image source={{ uri: stylist.portfolio[0] }} style={styles.stylistAvatar} />
           ) : (
             <View style={[styles.stylistAvatar, styles.avatarPlaceholder]}>
               <Text style={styles.avatarText}>
@@ -371,7 +375,7 @@ export default function BookingConfirmationScreen() {
 
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Location</Text>
-          <Text style={styles.detailValue}>{stylist?.location || 'To be confirmed'}</Text>
+          <Text style={styles.detailValue}>{stylist?.location?.address || 'To be confirmed'}</Text>
         </View>
 
         <View style={styles.detailRow}>
@@ -425,7 +429,7 @@ export default function BookingConfirmationScreen() {
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
           <TouchableOpacity 
             style={styles.backButton}
-            onPress={() => navigation?.navigate('CustomerHome')}
+            onPress={() => navigation?.goBack()}
           >
             <Ionicons name="close" size={24} color="#4267FF" />
           </TouchableOpacity>

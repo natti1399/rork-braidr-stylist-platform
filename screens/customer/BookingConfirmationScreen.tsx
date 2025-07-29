@@ -8,14 +8,13 @@ import {
   Image, 
   StatusBar,
   Alert,
-  Linking,
-  Share,
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { bookingService, type Stylist, type Service } from '../../src/services/bookingService';
+import * as Sharing from 'expo-sharing';
 
 interface RouteParams {
   stylistId: string;
@@ -58,7 +57,7 @@ export default function BookingConfirmationScreen() {
       // Load selected services details
       const allServices = await bookingService.getStylistServices(stylistId);
       if (allServices.success && allServices.data) {
-        const selectedServiceDetails = allServices.data.filter(service => 
+        const selectedServiceDetails = allServices.data.filter((service: Service) => 
           selectedServices.some(selected => selected.serviceId === service.id)
         );
         setServices(selectedServiceDetails);
@@ -152,21 +151,23 @@ export default function BookingConfirmationScreen() {
   };
 
   const handleMessageStylist = () => {
-    const displayName = stylist?.businessName || stylist?.bio.split(' ').slice(0, 2).join(' ') || 'Stylist';
-    navigation.navigate('Chat', { 
-      conversationId: stylistId,
-      stylistName: displayName,
-      stylistAvatar: stylist?.portfolio?.[0]
-    });
+    Alert.alert('Message Stylist', 'Messaging feature will be available soon.');
   };
 
-  const handleShareBooking = () => {
-    const displayName = stylist?.businessName || stylist?.bio.split(' ').slice(0, 2).join(' ') || 'Stylist';
-    const serviceNames = services.map(s => s.name).join(', ');
-    Share.share({
-      message: `I've booked ${serviceNames} with ${displayName} on ${formatDate(selectedDate)} at ${selectedTime}. Booking ID: ${bookingId}`,
-      title: 'Braidr Booking Confirmation'
-    });
+  const handleShareBooking = async () => {
+    try {
+      const displayName = stylist?.businessName || stylist?.bio.split(' ').slice(0, 2).join(' ') || 'Stylist';
+      const serviceNames = services.map(s => s.name).join(', ');
+      const message = `I've booked ${serviceNames} with ${displayName} on ${formatDate(selectedDate)} at ${selectedTime}. Booking ID: ${bookingId}`;
+      
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync('data:text/plain;base64,' + btoa(message));
+      } else {
+        Alert.alert('Share', message);
+      }
+    } catch (error) {
+      Alert.alert('Share', 'Unable to share booking details.');
+    }
   };
 
   const handleAddToCalendar = () => {

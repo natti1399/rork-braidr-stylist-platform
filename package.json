@@ -27,6 +27,7 @@
     "expo-camera": "~16.1.11",
     "expo-linear-gradient": "~14.1.5",
     "expo-location": "^18.1.6",
+    "expo-sharing": "~13.1.5",
     "lucide-react-native": "0.526.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",

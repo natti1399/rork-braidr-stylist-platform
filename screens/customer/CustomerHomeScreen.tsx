@@ -1,79 +1,149 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { bookingService, type Appointment, type Stylist } from '../../src/services/bookingService';
+import { locationService } from '../../src/services/locationService';
 
-interface Stylist {
-  id: string;
-  name: string;
-  specialties: string;
-  rating: number;
-  reviews: number;
-  distance: string;
-  avatar?: string;
-  availableNext?: string;
-}
-
-const mockStylists: Stylist[] = [
-  {
-    id: '1',
-    name: 'Aisha Thompson',
-    specialties: 'Knotless & Goddess Braids',
-    rating: 5.0,
-    reviews: 89,
-    distance: '0.8 km',
-    avatar: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=200&q=50',
-    availableNext: 'Available Tomorrow 10:00 AM'
-  },
-  {
-    id: '2',
-    name: 'Maya Johnson',
-    specialties: 'Box Braids & Cornrows',
-    rating: 4.9,
-    reviews: 124,
-    distance: '1.2 km',
-    avatar: 'https://images.unsplash.com/photo-1544725176-7c40e5a2c9f4?auto=format&fit=crop&w=200&q=50',
-    availableNext: 'Available Today 3:00 PM'
-  },
-  {
-    id: '3',
-    name: 'Zara Williams',
-    specialties: 'Twist Braids & Locs',
-    rating: 4.8,
-    reviews: 67,
-    distance: '2.1 km',
-    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=200&q=50',
-    availableNext: 'Available Friday 11:00 AM'
-  }
-];
+// Removed mock data - using real API data
 
 export default function CustomerHomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const [greeting, setGreeting] = useState('Good morning');
+  const [upcomingAppointment, setUpcomingAppointment] = useState<Appointment | null>(null);
+  const [nearbyStylists, setNearbyStylists] = useState<Stylist[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userLocation, setUserLocation] = useState<{latitude: number; longitude: number} | null>(null);
 
-  const renderStylistCard = (stylist: Stylist) => (
-    <TouchableOpacity key={stylist.id} style={styles.stylistCard}>
-      <Image source={{ uri: stylist.avatar }} style={styles.stylistAvatar} />
-      <View style={styles.stylistInfo}>
-        <Text style={styles.stylistName}>{stylist.name}</Text>
-        <Text style={styles.stylistSpecialties}>{stylist.specialties}</Text>
-        <View style={styles.stylistMeta}>
-          <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={14} color="#FFC90A" />
-            <Text style={styles.ratingText}>{stylist.rating} ({stylist.reviews})</Text>
-          </View>
-          <Text style={styles.distanceText}>{stylist.distance}</Text>
-        </View>
-        {stylist.availableNext && (
-          <View style={styles.availabilityContainer}>
-            <View style={styles.availabilityDot} />
-            <Text style={styles.availabilityText}>{stylist.availableNext}</Text>
+  // Set greeting based on time of day
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      setGreeting('Good morning');
+    } else if (hour < 17) {
+      setGreeting('Good afternoon');
+    } else {
+      setGreeting('Good evening');
+    }
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadHomeData();
+    }, [])
+  );
+
+  const loadHomeData = async () => {
+    try {
+      setLoading(true);
+      
+      // Get user location
+      const location = await locationService.getCurrentLocation();
+      if (location) {
+        setUserLocation(location.coordinates);
+      }
+
+      // Load upcoming appointments
+      const appointmentsResponse = await bookingService.getMyBookings();
+      if (appointmentsResponse.success && appointmentsResponse.data) {
+        const upcoming = appointmentsResponse.data
+          .filter(apt => apt.status === 'confirmed' && new Date(apt.appointmentDate) >= new Date())
+          .sort((a, b) => new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime())[0];
+        setUpcomingAppointment(upcoming || null);
+      }
+
+      // Load nearby stylists
+      const stylistsResponse = await bookingService.searchStylists({
+        ...(location && {
+          latitude: location.coordinates.latitude,
+          longitude: location.coordinates.longitude,
+          radius: 10
+        }),
+        sortBy: 'distance',
+        limit: 3
+      });
+      
+      if (stylistsResponse.success && stylistsResponse.data) {
+        setNearbyStylists(stylistsResponse.data);
+      }
+    } catch (error) {
+      console.error('Failed to load home data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFindBraiders = () => {
+    navigation.navigate('CustomerSearch');
+  };
+
+  const handleMyBookings = () => {
+    navigation.navigate('CustomerBookings');
+  };
+
+  const handleStylistPress = (stylist: Stylist) => {
+    navigation.navigate('StylistDetail', { stylistId: stylist.id });
+  };
+
+  const handleBookNow = (stylist: Stylist) => {
+    navigation.navigate('ServiceSelection', { stylistId: stylist.id });
+  };
+
+  const formatAppointmentDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return 'Tomorrow';
+    } else {
+      return date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+  };
+
+  const renderStylistCard = (stylist: Stylist) => {
+    const displayName = stylist.businessName || stylist.bio.split(' ').slice(0, 2).join(' ');
+    const avatarImage = stylist.portfolio && stylist.portfolio.length > 0 ? stylist.portfolio[0] : null;
+    
+    return (
+      <TouchableOpacity key={stylist.id} style={styles.stylistCard} onPress={() => handleStylistPress(stylist)}>
+        {avatarImage ? (
+          <Image source={{ uri: avatarImage }} style={styles.stylistAvatar} />
+        ) : (
+          <View style={[styles.stylistAvatar, styles.avatarPlaceholder]}>
+            <Text style={styles.avatarText}>{displayName.split(' ').map(n => n[0]).join('')}</Text>
           </View>
         )}
-      </View>
-    </TouchableOpacity>
-  );
+        <View style={styles.stylistInfo}>
+          <Text style={styles.stylistName} numberOfLines={1}>{displayName}</Text>
+          <Text style={styles.stylistSpecialties} numberOfLines={1}>
+            {stylist.specialties.slice(0, 2).join(', ')}
+          </Text>
+          <View style={styles.stylistMeta}>
+            <View style={styles.ratingContainer}>
+              <Ionicons name="star" size={14} color="#FFC90A" />
+              <Text style={styles.ratingText}>{stylist.rating.toFixed(1)} ({stylist.reviewCount})</Text>
+            </View>
+            <Text style={styles.distanceText}>{stylist.distance || 'N/A'}</Text>
+          </View>
+          {stylist.isAvailable && (
+            <View style={styles.availabilityContainer}>
+              <View style={styles.availabilityDot} />
+              <Text style={styles.availabilityText}>Available for booking</Text>
+            </View>
+          )}
+        </View>
+        <TouchableOpacity style={styles.quickBookButton} onPress={() => handleBookNow(stylist)}>
+          <Text style={styles.quickBookText}>Book</Text>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -97,7 +167,7 @@ export default function CustomerHomeScreen() {
         <View style={styles.quickActions}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => navigation.navigate('Search')}
+            onPress={handleFindBraiders}
           >
             <View style={styles.actionIconContainer}>
               <Ionicons name="people-outline" size={24} color="#4267FF" />
@@ -107,7 +177,7 @@ export default function CustomerHomeScreen() {
           
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => navigation.navigate('Bookings')}
+            onPress={handleMyBookings}
           >
             <View style={styles.actionIconContainer}>
               <Ionicons name="calendar-outline" size={24} color="#4267FF" />
@@ -117,35 +187,62 @@ export default function CustomerHomeScreen() {
         </View>
 
         {/* Upcoming Appointment */}
-        <View style={styles.appointmentCard}>
-          <View style={styles.appointmentHeader}>
-            <Ionicons name="calendar" size={20} color="#4267FF" />
-            <Text style={styles.appointmentTitle}>Upcoming Appointment</Text>
+        {loading ? (
+          <View style={styles.appointmentCard}>
+            <ActivityIndicator size="small" color="#4267FF" />
+            <Text style={styles.loadingText}>Loading appointments...</Text>
           </View>
-          <Text style={styles.appointmentService}>Box Braids with Maya Johnson</Text>
-          <Text style={styles.appointmentDetails}>Tomorrow at 2:00 PM • Studio Downtown</Text>
-          
-          <View style={styles.appointmentActions}>
-            <TouchableOpacity style={styles.rescheduleButton}>
-              <Text style={styles.rescheduleText}>Reschedule</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.viewDetailsButton}>
-              <Text style={styles.viewDetailsText}>View Details</Text>
+        ) : upcomingAppointment ? (
+          <View style={styles.appointmentCard}>
+            <View style={styles.appointmentHeader}>
+              <Ionicons name="calendar" size={20} color="#4267FF" />
+              <Text style={styles.appointmentTitle}>Upcoming Appointment</Text>
+            </View>
+            <Text style={styles.appointmentService}>Service Booking</Text>
+            <Text style={styles.appointmentDetails}>
+              {formatAppointmentDate(upcomingAppointment.appointmentDate)} at {upcomingAppointment.startTime} • {upcomingAppointment.location || 'Location TBD'}
+            </Text>
+            
+            <View style={styles.appointmentActions}>
+              <TouchableOpacity style={styles.rescheduleButton}>
+                <Text style={styles.rescheduleText}>Reschedule</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.viewDetailsButton} onPress={handleMyBookings}>
+                <Text style={styles.viewDetailsText}>View Details</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.appointmentCard}>
+            <View style={styles.appointmentHeader}>
+              <Ionicons name="calendar-outline" size={20} color="#666" />
+              <Text style={[styles.appointmentTitle, { color: '#666' }]}>No Upcoming Appointments</Text>
+            </View>
+            <Text style={styles.appointmentDetails}>Book your first braiding session today!</Text>
+            
+            <TouchableOpacity style={styles.viewDetailsButton} onPress={handleFindBraiders}>
+              <Text style={styles.viewDetailsText}>Find Braiders</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        )}
 
         {/* Nearby Braiders */}
         <View style={styles.nearbySection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Nearby Braiders</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Search')}>
+            <TouchableOpacity onPress={handleFindBraiders}>
               <Text style={styles.viewAllText}>View all →</Text>
             </TouchableOpacity>
           </View>
           
           <View style={styles.stylistsList}>
-            {mockStylists.map(renderStylistCard)}
+            {loading ? (
+              <ActivityIndicator size="large" color="#4267FF" style={{ marginTop: 20 }} />
+            ) : nearbyStylists.length > 0 ? (
+              nearbyStylists.map(renderStylistCard)
+            ) : (
+              <Text style={styles.noDataText}>No nearby braiders found</Text>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -385,5 +482,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#34C759',
     fontWeight: '500'
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#4267FF',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold'
+  },
+  quickBookButton: {
+    backgroundColor: '#4267FF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignSelf: 'flex-start'
+  },
+  quickBookText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8
+  },
+  noDataText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    paddingVertical: 20
   }
 });

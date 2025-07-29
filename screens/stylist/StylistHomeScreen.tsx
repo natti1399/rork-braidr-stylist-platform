@@ -1,15 +1,61 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useAuth } from '../../contexts/AuthContext';
+import { bookingService, type Appointment } from '../../src/services/bookingService';
 
 export default function StylistHomeScreen() {
   const insets = useSafeAreaInsets();
-  // Sample appointments data – replace with real data later.
-  const todaysAppointments = [
-    { id: '1', time: '10:00 AM', customer: 'Sarah Johnson', service: 'Box Braids', price: 180, confirmed: true },
-    { id: '2', time: '2:30 PM', customer: 'Michelle Lee', service: 'Knotless Braids', price: 220, confirmed: false },
-    { id: '3', time: '5:00 PM', customer: 'Tasha Williams', service: 'Goddess Braids', price: 150, confirmed: true },
-  ];
+  const navigation = useNavigation();
+  const { user } = useAuth();
+  const [todaysAppointments, setTodaysAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    todayCount: 0,
+    weekCount: 0,
+    pendingCount: 0
+  });
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadAppointments();
+    }, [])
+  );
+
+  const loadAppointments = async () => {
+    try {
+      setLoading(true);
+      const response = await bookingService.getMyBookings();
+      if (response.success && response.data) {
+        const today = new Date().toDateString();
+        const todayAppts = response.data.filter(apt => 
+          new Date(apt.appointmentDate).toDateString() === today
+        );
+        setTodaysAppointments(todayAppts);
+        
+        // Calculate stats
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        const weekAppts = response.data.filter(apt => 
+          new Date(apt.appointmentDate) >= weekStart
+        );
+        const pendingAppts = response.data.filter(apt => apt.status === 'pending');
+        
+        setStats({
+          todayCount: todayAppts.length,
+          weekCount: weekAppts.length,
+          pendingCount: pendingAppts.length
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load appointments:', error);
+      Alert.alert('Error', 'Failed to load your appointments');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -18,21 +64,32 @@ export default function StylistHomeScreen() {
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
         <View style={styles.profileGreeting}>
           <View style={styles.profileInitialCircle}>
-            <Text style={styles.profileInitial}>T</Text>
+            <Text style={styles.profileInitial}>
+              {user?.firstName?.charAt(0)?.toUpperCase() || 'S'}
+            </Text>
           </View>
           <View>
-            <Text style={styles.greeting}>Good afternoon, Stylist! 👋</Text>
-            <Text style={styles.appointmentsSummary}>You have {todaysAppointments.length} appointments today.</Text>
+            <Text style={styles.greeting}>
+              Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {user?.firstName || 'Stylist'}! 👋
+            </Text>
+            <Text style={styles.appointmentsSummary}>
+              {loading ? 'Loading...' : `You have ${stats.todayCount} appointments today.`}
+            </Text>
           </View>
         </View>
         <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={() => navigation.navigate('NotificationCenter')}
+          >
             <Ionicons name="notifications-outline" size={22} color="#333" />
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>2</Text>
-            </View>
+            {stats.pendingCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{stats.pendingCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
             <Ionicons name="person-circle-outline" size={28} color="#333" />
           </TouchableOpacity>
         </View>
@@ -48,41 +105,79 @@ export default function StylistHomeScreen() {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Text style={styles.nextAppointmentTitle}>Next Appointment</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('Calendar')}>
               <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.appointmentTimeContainer}>
-            <Ionicons name="time-outline" size={16} color="#4267FF" style={styles.timeIcon} />
-            <Text style={styles.nextAppointmentTime}>Today at 10:00 AM</Text>
-          </View>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#4267FF" />
+              <Text style={styles.loadingText}>Loading appointments...</Text>
+            </View>
+          ) : todaysAppointments.length > 0 ? (
+            (() => {
+              const nextAppointment = todaysAppointments
+                .filter(apt => new Date(`${apt.appointmentDate} ${apt.startTime}`) > new Date())
+                .sort((a, b) => new Date(`${a.appointmentDate} ${a.startTime}`).getTime() - new Date(`${b.appointmentDate} ${b.startTime}`).getTime())[0];
+              
+              return nextAppointment ? (
+                <>
+                  <View style={styles.appointmentTimeContainer}>
+                    <Ionicons name="time-outline" size={16} color="#4267FF" style={styles.timeIcon} />
+                    <Text style={styles.nextAppointmentTime}>
+                      Today at {nextAppointment.startTime}
+                    </Text>
+                  </View>
 
-          <View style={styles.appointmentCard}>
-            <View style={styles.appointmentDetailsRow}>
-              <Text style={styles.appointmentService}>Box Braids for Sarah Johnson</Text>
-              <View style={styles.blueDot} />
+                  <View style={styles.appointmentCard}>
+                    <View style={styles.appointmentDetailsRow}>
+                      <Text style={styles.appointmentService}>
+                        {nextAppointment.serviceId} - Customer #{nextAppointment.customerId.slice(-4)}
+                      </Text>
+                      <View style={[styles.blueDot, { 
+                        backgroundColor: nextAppointment.status === 'confirmed' ? '#4267FF' : 
+                                        nextAppointment.status === 'pending' ? '#F59E0B' : '#6B7280' 
+                      }]} />
+                    </View>
+                    <View style={styles.appointmentInfoRow}>
+                      <View style={styles.durationContainer}>
+                        <Ionicons name="time" size={14} color="#666" style={styles.durationIcon} />
+                        <Text style={styles.appointmentDuration}>{Math.round(nextAppointment.duration / 60)}h</Text>
+                      </View>
+                      <Text style={styles.appointmentStatus}>
+                        {nextAppointment.status.charAt(0).toUpperCase() + nextAppointment.status.slice(1)}
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.noAppointmentContainer}>
+                  <Text style={styles.noAppointmentText}>No more appointments today</Text>
+                </View>
+              );
+            })()
+          ) : (
+            <View style={styles.noAppointmentContainer}>
+              <Text style={styles.noAppointmentText}>No appointments scheduled for today</Text>
             </View>
-            <View style={styles.appointmentInfoRow}>
-              <View style={styles.durationContainer}>
-                <Ionicons name="time" size={14} color="#666" style={styles.durationIcon} />
-                <Text style={styles.appointmentDuration}>4h</Text>
-              </View>
-              <Text style={styles.appointmentPrice}>$180</Text>
-            </View>
-          </View>
+          )}
         </View>
 
         {/* QUICK ACTIONS */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActions}>
           {[
-            { icon: 'calendar-outline', label: 'Manage Availability' },
-            { icon: 'add-circle-outline', label: 'Create New Service' },
-            { icon: 'chatbox-ellipses-outline', label: 'Customer Messages' },
-            { icon: 'cash-outline', label: 'View Earnings' },
+            { icon: 'calendar-outline', label: 'Manage Availability', screen: 'AvailabilityManagement' },
+            { icon: 'add-circle-outline', label: 'Manage Services', screen: 'ServiceManagement' },
+            { icon: 'chatbox-ellipses-outline', label: 'Messages', screen: 'Messages' },
+            { icon: 'settings-outline', label: 'Settings', screen: 'StylistSettings' },
           ].map((btn) => (
-            <TouchableOpacity key={btn.label} style={styles.actionButton}>
+            <TouchableOpacity 
+              key={btn.label} 
+              style={styles.actionButton}
+              onPress={() => navigation.navigate(btn.screen)}
+            >
               <View style={styles.actionIconContainer}>
                 <Ionicons name={btn.icon as any} size={22} color="white" />
               </View>
@@ -95,31 +190,54 @@ export default function StylistHomeScreen() {
         <View style={styles.todaysAppointmentsContainer}>
           <Text style={styles.sectionTitle}>Today's Appointments</Text>
 
-          {todaysAppointments.map((appt) => (
-            <View key={appt.id} style={styles.appointmentListItem}>
-              <View style={styles.appointmentTimeColumn}>
-                <Text style={styles.appointmentListTime}>{appt.time}</Text>
-              </View>
-
-              <View style={styles.appointmentDetailsColumn}>
-                <Text style={styles.appointmentListCustomer}>{appt.customer}</Text>
-                <Text style={styles.appointmentListService}>{appt.service}</Text>
-              </View>
-
-              <View style={styles.appointmentPriceColumn}>
-                <Text style={styles.appointmentListPrice}>${appt.price}</Text>
-                {appt.confirmed ? (
-                  <View style={styles.confirmedBadge}>
-                    <Text style={styles.confirmedBadgeText}>Confirmed</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity style={styles.confirmButton}>
-                    <Text style={styles.confirmButtonText}>Confirm</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#4267FF" />
+              <Text style={styles.loadingText}>Loading appointments...</Text>
             </View>
-          ))}
+          ) : todaysAppointments.length > 0 ? (
+            todaysAppointments.map((appt) => (
+              <View key={appt.id} style={styles.appointmentListItem}>
+                <View style={styles.appointmentTimeColumn}>
+                  <Text style={styles.appointmentListTime}>{appt.startTime}</Text>
+                </View>
+
+                <View style={styles.appointmentDetailsColumn}>
+                  <Text style={styles.appointmentListCustomer}>Customer #{appt.customerId.slice(-4)}</Text>
+                  <Text style={styles.appointmentListService}>Service ID: {appt.serviceId}</Text>
+                </View>
+
+                <View style={styles.appointmentPriceColumn}>
+                  <Text style={styles.appointmentListPrice}>${appt.totalPrice}</Text>
+                  {appt.status === 'confirmed' ? (
+                    <View style={styles.confirmedBadge}>
+                      <Text style={styles.confirmedBadgeText}>Confirmed</Text>
+                    </View>
+                  ) : appt.status === 'pending' ? (
+                    <TouchableOpacity 
+                      style={styles.confirmButton}
+                      onPress={() => bookingService.updateBookingStatus(appt.id, 'confirmed')}
+                    >
+                      <Text style={styles.confirmButtonText}>Confirm</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={[styles.appointmentStatus, { 
+                      backgroundColor: appt.status === 'completed' ? '#34C759' : 
+                                     appt.status === 'cancelled' ? '#FF3B30' : '#F59E0B' 
+                    }]}>
+                      <Text style={styles.appointmentStatusText}>
+                        {appt.status.charAt(0).toUpperCase() + appt.status.slice(1)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))
+          ) : (
+            <View style={styles.noAppointmentContainer}>
+              <Text style={styles.noAppointmentText}>No appointments scheduled for today</Text>
+            </View>
+          )}
 
           <TouchableOpacity style={styles.addAppointmentButton}>
             <Ionicons name="add" size={24} color="white" />
@@ -282,5 +400,33 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#666',
+  },
+  noAppointmentContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  noAppointmentText: {
+    fontSize: 16,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  appointmentStatus: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  appointmentStatusText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

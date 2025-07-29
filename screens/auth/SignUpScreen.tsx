@@ -16,7 +16,8 @@ interface Props {
   role: 'customer' | 'stylist';
   onBack: () => void;
   onSignUp: (userData: {
-    fullName: string;
+    firstName: string;
+    lastName: string;
     email: string;
     password: string;
     role: 'customer' | 'stylist';
@@ -25,7 +26,8 @@ interface Props {
 }
 
 export default function SignUpScreen({ role, onBack, onSignUp, onSignIn }: Props) {
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -34,8 +36,13 @@ export default function SignUpScreen({ role, onBack, onSignUp, onSignIn }: Props
   const [isLoading, setIsLoading] = useState(false);
 
   const validateForm = () => {
-    if (!fullName.trim()) {
-      Alert.alert('Error', 'Please enter your full name');
+    if (!firstName.trim()) {
+      Alert.alert('Error', 'Please enter your first name');
+      return false;
+    }
+
+    if (!lastName.trim()) {
+      Alert.alert('Error', 'Please enter your last name');
       return false;
     }
 
@@ -63,7 +70,8 @@ export default function SignUpScreen({ role, onBack, onSignUp, onSignIn }: Props
     setIsLoading(true);
     try {
       await onSignUp({
-        fullName: fullName.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         email: email.trim(),
         password,
         role,
@@ -103,13 +111,26 @@ export default function SignUpScreen({ role, onBack, onSignUp, onSignIn }: Props
           {/* Form */}
           <View style={styles.formSection}>
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Full Name</Text>
+              <Text style={styles.inputLabel}>First Name</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Enter your full name"
+                placeholder="Enter your first name"
                 placeholderTextColor="#999999"
-                value={fullName}
-                onChangeText={setFullName}
+                value={firstName}
+                onChangeText={setFirstName}
+                autoCapitalize="words"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Last Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your last name"
+                placeholderTextColor="#999999"
+                value={lastName}
+                onChangeText={setLastName}
                 autoCapitalize="words"
                 autoCorrect={false}
               />

@@ -1,364 +1,278 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  Image, 
-  StatusBar,
-  Dimensions 
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, ActivityIndicator, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { bookingService, type Stylist, type Service } from '../../src/services/bookingService';
 
 const { width } = Dimensions.get('window');
 
-interface Service {
-  id: string;
-  name: string;
-  description: string;
-  price: string;
-  duration: string;
-  image: string;
+interface RouteParams {
+  stylistId: string;
 }
 
-interface Review {
-  id: string;
-  customerName: string;
-  rating: number;
-  comment: string;
-  date: string;
-  images?: string[];
-}
-
-interface StylistDetailScreenProps {
-  route?: {
-    params?: {
-      stylistId?: string;
-    };
-  };
-  navigation?: any;
-}
-
-// Sample stylist data
-const stylistData = {
-  id: '1',
-  name: 'Maya Johnson',
-  specialties: 'Box Braids & Protective Styles',
-  rating: 4.9,
-  reviews: 127,
-  distance: '1.2 km',
-  experience: '5+ years',
-  avatar: 'https://images.unsplash.com/photo-1544725176-7c40e5a2c9f4?auto=format&fit=crop&w=400&q=80',
-  bio: 'Passionate braiding stylist with over 5 years of experience. I specialize in protective styles that promote healthy hair growth while keeping you looking fabulous. My goal is to make every client feel confident and beautiful.',
-  location: 'Brooklyn, NY',
-  responseTime: 'Usually responds within 1 hour',
-  languages: ['English', 'Spanish'],
-  isVerified: true,
-  portfolio: [
-    'https://images.unsplash.com/photo-1580618672591-eb180b1a973f?auto=format&fit=crop&w=300&q=80',
-    'https://images.unsplash.com/photo-1594736797933-d0401ba2fe65?auto=format&fit=crop&w=300&q=80',
-    'https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?auto=format&fit=crop&w=300&q=80',
-    'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=300&q=80',
-    'https://images.unsplash.com/photo-1595475038665-d7e8b9a4d9b4?auto=format&fit=crop&w=300&q=80',
-    'https://images.unsplash.com/photo-1580618652393-3c23d2dbb02c?auto=format&fit=crop&w=300&q=80',
-  ]
-};
-
-const services: Service[] = [
-  {
-    id: '1',
-    name: 'Medium Box Braids',
-    description: 'Classic medium-sized box braids, perfect for everyday wear',
-    price: '$180',
-    duration: '4-6 hours',
-    image: 'https://images.unsplash.com/photo-1580618672591-eb180b1a973f?auto=format&fit=crop&w=200&q=80'
-  },
-  {
-    id: '2',
-    name: 'Small Box Braids',
-    description: 'Detailed small box braids for a more intricate look',
-    price: '$220',
-    duration: '6-8 hours',
-    image: 'https://images.unsplash.com/photo-1594736797933-d0401ba2fe65?auto=format&fit=crop&w=200&q=80'
-  },
-  {
-    id: '3',
-    name: 'Knotless Braids',
-    description: 'Gentle knotless braids that reduce tension on your scalp',
-    price: '$250',
-    duration: '5-7 hours',
-    image: 'https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?auto=format&fit=crop&w=200&q=80'
-  },
-  {
-    id: '4',
-    name: 'Jumbo Braids',
-    description: 'Quick and stylish jumbo braids for a bold look',
-    price: '$120',
-    duration: '2-3 hours',
-    image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=200&q=80'
-  }
-];
-
-const reviews: Review[] = [
-  {
-    id: '1',
-    customerName: 'Sarah M.',
-    rating: 5,
-    comment: 'Maya did an amazing job with my box braids! They lasted 8 weeks and looked perfect the entire time. Highly recommend!',
-    date: '2 weeks ago',
-    images: ['https://images.unsplash.com/photo-1580618672591-eb180b1a973f?auto=format&fit=crop&w=200&q=80']
-  },
-  {
-    id: '2',
-    customerName: 'Jennifer K.',
-    rating: 5,
-    comment: 'Professional, clean, and skilled. Maya made me feel so comfortable and the results were exactly what I wanted.',
-    date: '1 month ago'
-  },
-  {
-    id: '3',
-    customerName: 'Tasha L.',
-    rating: 4,
-    comment: 'Great work! The braids were neat and lasted long. Will definitely book again.',
-    date: '2 months ago'
-  }
-];
-
-export default function StylistDetailScreen({ route, navigation }: StylistDetailScreenProps) {
+export default function StylistDetailScreen() {
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<'services' | 'portfolio' | 'reviews'>('services');
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { stylistId } = route.params as RouteParams;
+  
+  const [stylist, setStylist] = useState<Stylist | null>(null);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, index) => (
-      <Ionicons
-        key={index}
-        name={index < Math.floor(rating) ? 'star' : index < rating ? 'star-half' : 'star-outline'}
-        size={16}
-        color="#FFD700"
-        style={{ marginRight: 2 }}
-      />
-    ));
+  useEffect(() => {
+    loadStylistData();
+    checkFavoriteStatus();
+  }, [stylistId]);
+
+  const loadStylistData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load stylist details
+      const stylistResponse = await bookingService.getStylistDetails(stylistId);
+      if (stylistResponse.success && stylistResponse.data) {
+        setStylist(stylistResponse.data);
+      } else {
+        Alert.alert('Error', 'Failed to load stylist details');
+        navigation.goBack();
+        return;
+      }
+
+      // Load stylist services
+      const servicesResponse = await bookingService.getStylistServices(stylistId);
+      if (servicesResponse.success && servicesResponse.data) {
+        setServices(servicesResponse.data);
+      }
+    } catch (error) {
+      console.error('Failed to load stylist data:', error);
+      Alert.alert('Error', 'Failed to load stylist information');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const renderService = (service: Service) => (
-    <TouchableOpacity
-      key={service.id}
-      style={styles.serviceCard}
-      onPress={() => navigation?.navigate('BookingDetails', { 
-        stylistId: stylistData.id, 
-        serviceId: service.id 
-      })}
+  const checkFavoriteStatus = async () => {
+    try {
+      const favorites = await bookingService.getFavoriteStylists();
+      setIsFavorite(favorites.includes(stylistId));
+    } catch (error) {
+      console.error('Failed to check favorite status:', error);
+    }
+  };
+
+  const toggleFavorite = async () => {
+    try {
+      if (isFavorite) {
+        await bookingService.removeFromFavorites(stylistId);
+        setIsFavorite(false);
+      } else {
+        await bookingService.addToFavorites(stylistId);
+        setIsFavorite(true);
+      }
+    } catch (error) {
+      console.error('Toggle favorite error:', error);
+      Alert.alert('Error', 'Failed to update favorites');
+    }
+  };
+
+  const handleBookService = (service: Service) => {
+    navigation.navigate('BookingFlow', { 
+      stylistId: stylistId,
+      serviceId: service.id 
+    });
+  };
+
+  const handleMessage = () => {
+    if (!stylist) return;
+    navigation.navigate('Chat', { 
+      conversationId: stylistId,
+      stylistName: stylist.businessName || stylist.bio,
+      stylistAvatar: stylist.portfolio[0] || null
+    });
+  };
+
+  const handleCall = () => {
+    Alert.alert('Call Stylist', 'This feature will be available soon!');
+  };
+
+  const renderPortfolioImage = (imageUrl: string, index: number) => (
+    <TouchableOpacity 
+      key={index} 
+      style={styles.portfolioImage}
+      onPress={() => setSelectedImageIndex(index)}
     >
-      <Image source={{ uri: service.image }} style={styles.serviceImage} />
-      <View style={styles.serviceInfo}>
+      <Image source={{ uri: imageUrl }} style={styles.portfolioImageContent} />
+    </TouchableOpacity>
+  );
+
+  const renderServiceCard = (service: Service) => (
+    <View key={service.id} style={styles.serviceCard}>
+      <View style={styles.serviceHeader}>
         <Text style={styles.serviceName}>{service.name}</Text>
-        <Text style={styles.serviceDescription}>{service.description}</Text>
-        <View style={styles.serviceDetails}>
-          <View style={styles.servicePrice}>
-            <Text style={styles.servicePriceText}>{service.price}</Text>
-            <Text style={styles.serviceDuration}>• {service.duration}</Text>
-          </View>
-          <TouchableOpacity style={styles.bookButton}>
-            <Text style={styles.bookButtonText}>Book</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.servicePrice}>${service.price}</Text>
       </View>
-    </TouchableOpacity>
-  );
-
-  const renderPortfolioImage = (image: string, index: number) => (
-    <TouchableOpacity key={index} style={styles.portfolioImageContainer}>
-      <Image source={{ uri: image }} style={styles.portfolioImage} />
-    </TouchableOpacity>
-  );
-
-  const renderReview = (review: Review) => (
-    <View key={review.id} style={styles.reviewCard}>
-      <View style={styles.reviewHeader}>
-        <View style={styles.reviewerInfo}>
-          <View style={styles.reviewerAvatar}>
-            <Text style={styles.reviewerInitial}>{review.customerName.charAt(0)}</Text>
-          </View>
-          <View>
-            <Text style={styles.reviewerName}>{review.customerName}</Text>
-            <Text style={styles.reviewDate}>{review.date}</Text>
-          </View>
+      <Text style={styles.serviceDescription} numberOfLines={2}>{service.description}</Text>
+      <View style={styles.serviceFooter}>
+        <View style={styles.serviceDuration}>
+          <Ionicons name="time-outline" size={16} color="#666" />
+          <Text style={styles.serviceDurationText}>{service.duration}</Text>
         </View>
-        <View style={styles.reviewRating}>
-          {renderStars(review.rating)}
-        </View>
+        <TouchableOpacity 
+          style={styles.bookServiceButton}
+          onPress={() => handleBookService(service)}
+        >
+          <Text style={styles.bookServiceText}>Book Now</Text>
+        </TouchableOpacity>
       </View>
-      <Text style={styles.reviewComment}>{review.comment}</Text>
-      {review.images && (
-        <ScrollView horizontal style={styles.reviewImages}>
-          {review.images.map((image, index) => (
-            <Image key={index} source={{ uri: image }} style={styles.reviewImage} />
-          ))}
-        </ScrollView>
-      )}
     </View>
   );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4267FF" />
+        <Text style={styles.loadingText}>Loading stylist details...</Text>
+      </View>
+    );
+  }
+
+  if (!stylist) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
+        <Text style={styles.errorText}>Stylist not found</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const displayName = stylist.businessName || stylist.bio.split(' ').slice(0, 2).join(' ');
+  const mainImage = stylist.portfolio && stylist.portfolio.length > 0 ? stylist.portfolio[selectedImageIndex] : null;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       
-      {/* Header with Image */}
-      <View style={styles.headerContainer}>
-        <Image source={{ uri: stylistData.avatar }} style={styles.headerImage} />
-        <View style={[styles.headerOverlay, { paddingTop: Math.max(insets.top, 20) }]}>
-          <View style={styles.headerActions}>
-            <TouchableOpacity 
-              style={styles.headerButton}
-              onPress={() => navigation?.goBack()}
-            >
-              <Ionicons name="chevron-back" size={24} color="white" />
-            </TouchableOpacity>
-            <View style={styles.headerRightActions}>
-              <TouchableOpacity style={styles.headerButton}>
-                <Ionicons name="share-outline" size={22} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.headerButton}
-                onPress={() => setIsFavorite(!isFavorite)}
-              >
-                <Ionicons 
-                  name={isFavorite ? "heart" : "heart-outline"} 
-                  size={22} 
-                  color={isFavorite ? "#FF3B30" : "white"} 
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
+        <TouchableOpacity style={styles.backIcon} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Stylist Profile</Text>
+        <TouchableOpacity style={styles.favoriteIcon} onPress={toggleFavorite}>
+          <Ionicons 
+            name={isFavorite ? "heart" : "heart-outline"} 
+            size={24} 
+            color={isFavorite ? "#FF3B30" : "white"} 
+          />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Main Image */}
+        {mainImage && (
+          <View style={styles.imageContainer}>
+            <Image source={{ uri: mainImage }} style={styles.mainImage} />
+            {stylist.portfolio.length > 1 && (
+              <View style={styles.imageIndicators}>
+                {stylist.portfolio.map((_, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.indicator,
+                      selectedImageIndex === index && styles.activeIndicator
+                    ]}
+                    onPress={() => setSelectedImageIndex(index)}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Stylist Info */}
-        <View style={styles.stylistInfo}>
-          <View style={styles.stylistHeader}>
-            <View style={styles.stylistTitleContainer}>
-              <Text style={styles.stylistName}>{stylistData.name}</Text>
-              {stylistData.isVerified && (
-                <Ionicons name="checkmark-circle" size={20} color="#4267FF" style={styles.verifiedBadge} />
-              )}
-            </View>
-            <Text style={styles.stylistSpecialties}>{stylistData.specialties}</Text>
+        <View style={styles.infoSection}>
+          <View style={styles.nameSection}>
+            <Text style={styles.stylistName}>{displayName}</Text>
+            {stylist.isVerified && (
+              <View style={styles.verifiedBadge}>
+                <Ionicons name="checkmark-circle" size={20} color="#34C759" />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            )}
           </View>
           
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <View style={styles.rating}>
-                {renderStars(stylistData.rating)}
-                <Text style={styles.ratingText}>{stylistData.rating}</Text>
-              </View>
-              <Text style={styles.reviewCount}>({stylistData.reviews} reviews)</Text>
+          <View style={styles.ratingSection}>
+            <View style={styles.ratingContainer}>
+              <Ionicons name="star" size={16} color="#FFC90A" />
+              <Text style={styles.ratingText}>{stylist.rating.toFixed(1)}</Text>
+              <Text style={styles.reviewCount}>({stylist.reviewCount} reviews)</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Ionicons name="location-outline" size={16} color="#666" />
-              <Text style={styles.distance}>{stylistData.distance} away</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Ionicons name="time-outline" size={16} color="#666" />
-              <Text style={styles.experience}>{stylistData.experience}</Text>
+            {stylist.distance && (
+              <Text style={styles.distanceText}>{stylist.distance} away</Text>
+            )}
+          </View>
+
+          <View style={styles.specialtiesSection}>
+            <Text style={styles.specialtiesTitle}>Specialties</Text>
+            <View style={styles.specialtiesList}>
+              {stylist.specialties.map((specialty, index) => (
+                <View key={index} style={styles.specialtyTag}>
+                  <Text style={styles.specialtyText}>{specialty}</Text>
+                </View>
+              ))}
             </View>
           </View>
 
-          <Text style={styles.bio}>{stylistData.bio}</Text>
+          <View style={styles.bioSection}>
+            <Text style={styles.bioTitle}>About</Text>
+            <Text style={styles.bioText}>{stylist.bio}</Text>
+          </View>
 
-          <View style={styles.detailsContainer}>
-            <View style={styles.detailItem}>
-              <Ionicons name="location" size={18} color="#4267FF" />
-              <Text style={styles.detailText}>{stylistData.location}</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Ionicons name="time" size={18} color="#4267FF" />
-              <Text style={styles.detailText}>{stylistData.responseTime}</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Ionicons name="language" size={18} color="#4267FF" />
-              <Text style={styles.detailText}>{stylistData.languages.join(', ')}</Text>
-            </View>
+          <View style={styles.experienceSection}>
+            <Text style={styles.experienceTitle}>Experience</Text>
+            <Text style={styles.experienceText}>{stylist.experience}</Text>
           </View>
         </View>
 
-        {/* Tabs */}
-        <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'services' && styles.activeTab]}
-            onPress={() => setActiveTab('services')}
-          >
-            <Text style={[styles.tabText, activeTab === 'services' && styles.activeTabText]}>
-              Services
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'portfolio' && styles.activeTab]}
-            onPress={() => setActiveTab('portfolio')}
-          >
-            <Text style={[styles.tabText, activeTab === 'portfolio' && styles.activeTabText]}>
-              Portfolio
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'reviews' && styles.activeTab]}
-            onPress={() => setActiveTab('reviews')}
-          >
-            <Text style={[styles.tabText, activeTab === 'reviews' && styles.activeTabText]}>
-              Reviews
-            </Text>
-          </TouchableOpacity>
+        {/* Portfolio */}
+        {stylist.portfolio && stylist.portfolio.length > 1 && (
+          <View style={styles.portfolioSection}>
+            <Text style={styles.portfolioTitle}>Portfolio</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.portfolioScroll}>
+              {stylist.portfolio.map(renderPortfolioImage)}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Services */}
+        <View style={styles.servicesSection}>
+          <Text style={styles.servicesTitle}>Services</Text>
+          {services.length > 0 ? (
+            services.map(renderServiceCard)
+          ) : (
+            <Text style={styles.noServicesText}>No services available</Text>
+          )}
         </View>
 
-        {/* Tab Content */}
-        <View style={styles.tabContent}>
-          {activeTab === 'services' && (
-            <View style={styles.servicesContainer}>
-              {services.map(renderService)}
-            </View>
-          )}
-
-          {activeTab === 'portfolio' && (
-            <View style={styles.portfolioContainer}>
-              <View style={styles.portfolioGrid}>
-                {stylistData.portfolio.map(renderPortfolioImage)}
-              </View>
-            </View>
-          )}
-
-          {activeTab === 'reviews' && (
-            <View style={styles.reviewsContainer}>
-              {reviews.map(renderReview)}
-            </View>
-          )}
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity style={styles.messageButton} onPress={handleMessage}>
+            <Ionicons name="chatbubble-outline" size={20} color="#4267FF" />
+            <Text style={styles.messageButtonText}>Message</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.callButton} onPress={handleCall}>
+            <Ionicons name="call-outline" size={20} color="#4267FF" />
+            <Text style={styles.callButtonText}>Call</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Bottom Action Buttons */}
-      <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity 
-          style={styles.messageButton}
-          onPress={() => navigation?.navigate('Chat', { 
-            conversationId: stylistData.id,
-            stylistName: stylistData.name,
-            stylistAvatar: stylistData.avatar
-          })}
-        >
-          <Ionicons name="chatbubble-outline" size={20} color="#4267FF" />
-          <Text style={styles.messageButtonText}>Message</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.bookNowButton}
-          onPress={() => navigation?.navigate('ServiceSelection', { stylistId: stylistData.id })}
-        >
-          <Text style={styles.bookNowButtonText}>Book Now</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -366,352 +280,331 @@ export default function StylistDetailScreen({ route, navigation }: StylistDetail
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f8f9fa'
   },
-  headerContainer: {
-    height: 300,
-    position: 'relative',
-  },
-  headerImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  headerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  header: {
+    backgroundColor: '#4267FF',
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
   },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  backIcon: {
+    padding: 8
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white'
+  },
+  favoriteIcon: {
+    padding: 8
+  },
+  scrollView: {
+    flex: 1
+  },
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f8f9fa'
   },
-  headerRightActions: {
-    flexDirection: 'row',
-    gap: 12,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666'
   },
-  content: {
+  errorContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 40
   },
-  stylistInfo: {
-    backgroundColor: 'white',
-    marginTop: -40,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+  errorText: {
+    fontSize: 18,
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 24,
+    textAlign: 'center'
+  },
+  backButton: {
+    backgroundColor: '#4267FF',
     paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 20,
+    paddingVertical: 12,
+    borderRadius: 8
   },
-  stylistHeader: {
-    marginBottom: 16,
+  backButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600'
   },
-  stylistTitleContainer: {
+  imageContainer: {
+    position: 'relative'
+  },
+  mainImage: {
+    width: width,
+    height: 300,
+    resizeMode: 'cover'
+  },
+  imageIndicators: {
+    position: 'absolute',
+    bottom: 16,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8
+  },
+  indicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)'
+  },
+  activeIndicator: {
+    backgroundColor: 'white'
+  },
+  infoSection: {
+    backgroundColor: 'white',
+    padding: 20,
+    marginTop: -20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20
+  },
+  nameSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 12
   },
   stylistName: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: 'bold',
     color: '#222',
-    marginRight: 8,
+    flex: 1
   },
   verifiedBadge: {
-    marginLeft: 4,
-  },
-  stylistSpecialties: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
-  },
-  statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    backgroundColor: '#f0f9f0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12
   },
-  statItem: {
+  verifiedText: {
+    fontSize: 12,
+    color: '#34C759',
+    fontWeight: '600',
+    marginLeft: 4
+  },
+  ratingSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20
   },
-  rating: {
+  ratingContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 4,
+    alignItems: 'center'
   },
   ratingText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#222',
-    marginLeft: 4,
+    marginLeft: 4
   },
   reviewCount: {
     fontSize: 14,
     color: '#666',
+    marginLeft: 4
   },
-  statDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: '#E5E5EA',
-    marginHorizontal: 12,
-  },
-  distance: {
+  distanceText: {
     fontSize: 14,
-    color: '#666',
-    marginLeft: 4,
+    color: '#666'
   },
-  experience: {
+  specialtiesSection: {
+    marginBottom: 20
+  },
+  specialtiesTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 12
+  },
+  specialtiesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8
+  },
+  specialtyTag: {
+    backgroundColor: '#f0f4ff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16
+  },
+  specialtyText: {
     fontSize: 14,
-    color: '#666',
-    marginLeft: 4,
-  },
-  bio: {
-    fontSize: 16,
-    color: '#444',
-    lineHeight: 24,
-    marginBottom: 20,
-  },
-  detailsContainer: {
-    gap: 12,
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailText: {
-    fontSize: 15,
-    color: '#666',
-    marginLeft: 12,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    marginTop: 8,
-    paddingHorizontal: 24,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomColor: '#4267FF',
-  },
-  tabText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#8E8E93',
-  },
-  activeTabText: {
     color: '#4267FF',
+    fontWeight: '500'
   },
-  tabContent: {
+  bioSection: {
+    marginBottom: 20
+  },
+  bioTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 8
+  },
+  bioText: {
+    fontSize: 16,
+    color: '#666',
+    lineHeight: 24
+  },
+  experienceSection: {
+    marginBottom: 20
+  },
+  experienceTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 8
+  },
+  experienceText: {
+    fontSize: 16,
+    color: '#666'
+  },
+  portfolioSection: {
     backgroundColor: 'white',
-    paddingBottom: 100,
+    padding: 20,
+    marginTop: 8
   },
-  servicesContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
+  portfolioTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 16
+  },
+  portfolioScroll: {
+    marginHorizontal: -20
+  },
+  portfolioImage: {
+    marginLeft: 20,
+    marginRight: 8
+  },
+  portfolioImageContent: {
+    width: 120,
+    height: 120,
+    borderRadius: 12
+  },
+  servicesSection: {
+    backgroundColor: 'white',
+    padding: 20,
+    marginTop: 8
+  },
+  servicesTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 16
   },
   serviceCard: {
-    flexDirection: 'row',
     backgroundColor: '#f8f9fa',
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12
   },
-  serviceImage: {
-    width: 80,
-    height: 80,
-    resizeMode: 'cover',
-  },
-  serviceInfo: {
-    flex: 1,
-    padding: 12,
+  serviceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
   },
   serviceName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#222',
-    marginBottom: 4,
+    flex: 1
+  },
+  servicePrice: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4267FF'
   },
   serviceDescription: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 8,
-    lineHeight: 20,
+    marginBottom: 12,
+    lineHeight: 20
   },
-  serviceDetails: {
+  serviceFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  servicePrice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  servicePriceText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#4267FF',
+    alignItems: 'center'
   },
   serviceDuration: {
-    fontSize: 14,
-    color: '#8E8E93',
-    marginLeft: 4,
+    flexDirection: 'row',
+    alignItems: 'center'
   },
-  bookButton: {
+  serviceDurationText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 4
+  },
+  bookServiceButton: {
     backgroundColor: '#4267FF',
     paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingVertical: 8,
+    borderRadius: 8
   },
-  bookButtonText: {
+  bookServiceText: {
     color: 'white',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '600'
   },
-  portfolioContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-  },
-  portfolioGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  portfolioImageContainer: {
-    width: (width - 60) / 2,
-    marginBottom: 12,
-  },
-  portfolioImage: {
-    width: '100%',
-    height: 120,
-    borderRadius: 12,
-    resizeMode: 'cover',
-  },
-  reviewsContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-  },
-  reviewCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-  },
-  reviewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  reviewerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  reviewerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#4267FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  reviewerInitial: {
-    color: 'white',
+  noServicesText: {
     fontSize: 16,
-    fontWeight: '600',
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    paddingVertical: 20
   },
-  reviewerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222',
-  },
-  reviewDate: {
-    fontSize: 12,
-    color: '#8E8E93',
-    marginTop: 2,
-  },
-  reviewRating: {
+  actionButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
-  reviewComment: {
-    fontSize: 15,
-    color: '#444',
-    lineHeight: 22,
-  },
-  reviewImages: {
-    marginTop: 12,
-  },
-  reviewImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    marginRight: 8,
-    resizeMode: 'cover',
-  },
-  bottomActions: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    padding: 20,
     gap: 12,
+    backgroundColor: 'white',
+    marginTop: 8
   },
   messageButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(66, 103, 255, 0.1)',
-    borderRadius: 16,
+    backgroundColor: '#f0f4ff',
     paddingVertical: 16,
-    gap: 8,
+    borderRadius: 12,
+    gap: 8
   },
   messageButtonText: {
-    color: '#4267FF',
     fontSize: 16,
     fontWeight: '600',
+    color: '#4267FF'
   },
-  bookNowButton: {
-    flex: 2,
-    backgroundColor: '#4267FF',
-    borderRadius: 16,
-    paddingVertical: 16,
+  callButton: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#f0f4ff',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8
   },
-  bookNowButtonText: {
-    color: 'white',
+  callButtonText: {
     fontSize: 16,
-    fontWeight: '700',
-  },
+    fontWeight: '600',
+    color: '#4267FF'
+  }
 });

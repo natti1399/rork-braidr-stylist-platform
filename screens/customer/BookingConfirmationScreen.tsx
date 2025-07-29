@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -9,78 +9,85 @@ import {
   StatusBar,
   Alert,
   Linking,
-  Share
+  Share,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { bookingService, type Stylist, type Service } from '../src/services/bookingService';
 
-interface BookingConfirmationScreenProps {
-  route?: {
-    params?: {
-      stylistId?: string;
-      serviceId?: string;
-      timeSlotId?: string;
-      selectedDate?: string;
-      selectedTime?: string;
-      location?: string;
-      specialRequests?: string;
-      contactNumber?: string;
-      addOns?: string[];
-      totalPrice?: number;
-      serviceName?: string;
-      serviceDuration?: string;
-    };
-  };
-  navigation?: any;
+interface RouteParams {
+  stylistId: string;
+  selectedServices: Array<{
+    serviceId: string;
+    addOns: string[];
+  }>;
+  selectedDate: string;
+  selectedTime: string;
 }
 
-// Sample data
-const stylistData = {
-  id: '1',
-  name: 'Maya Johnson',
-  avatar: 'https://images.unsplash.com/photo-1544725176-7c40e5a2c9f4?auto=format&fit=crop&w=200&q=80',
-  phone: '+1 (555) 123-4567',
-  location: 'Brooklyn, NY',
-  rating: 4.9,
-  reviews: 127,
-};
-
-const serviceData = {
-  '1': {
-    name: 'Medium Box Braids',
-    description: 'Classic medium-sized box braids, perfect for everyday wear',
-    price: 180,
-    duration: '4-6 hours',
-    image: 'https://images.unsplash.com/photo-1580618672591-eb180b1a973f?auto=format&fit=crop&w=300&q=80'
-  }
-};
-
-const addOnsData = {
-  '1': { name: 'Hair Extensions', price: 25 },
-  '2': { name: 'Scalp Treatment', price: 15 },
-  '3': { name: 'Hair Accessories', price: 20 },
-};
-
-export default function BookingConfirmationScreen({ route, navigation }: BookingConfirmationScreenProps) {
+export default function BookingConfirmationScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { stylistId, selectedServices, selectedDate, selectedTime } = route.params as RouteParams;
   
-  const {
-    stylistId = '1',
-    serviceId = '1',
-    selectedDate = '2024-02-01',
-    selectedTime = '10:00 AM',
-    location = '',
-    specialRequests = '',
-    contactNumber = '',
-    addOns = [],
-    totalPrice = 180,
-    serviceName = 'Medium Box Braids',
-    serviceDuration = '4-6 hours'
-  } = route?.params || {};
-
+  const [stylist, setStylist] = useState<Stylist | null>(null);
+  const [services, setServices] = useState<Service[]>([]);
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
-  const service = serviceData[serviceId];
+  const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+  
   const bookingId = `BRD${Date.now().toString().slice(-6)}`;
+
+  useEffect(() => {
+    loadData();
+  }, [stylistId, selectedServices]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load stylist details
+      const stylistResponse = await bookingService.getStylistById(stylistId);
+      if (stylistResponse.success && stylistResponse.data) {
+        setStylist(stylistResponse.data);
+      }
+
+      // Load selected services details
+      const allServices = await bookingService.getServicesByStylist(stylistId);
+      if (allServices.success && allServices.data) {
+        const selectedServiceDetails = allServices.data.filter(service => 
+          selectedServices.some(selected => selected.serviceId === service.id)
+        );
+        setServices(selectedServiceDetails);
+      }
+    } catch (error) {
+      console.error('Failed to load data:', error);
+      Alert.alert('Error', 'Failed to load booking details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateTotal = () => {
+    let total = 0;
+    services.forEach(service => {
+      const selectedService = selectedServices.find(s => s.serviceId === service.id);
+      total += service.price;
+      if (selectedService?.addOns) {
+        total += selectedService.addOns.length * 10; // $10 per add-on
+      }
+    });
+    return total;
+  };
+
+  const calculateDuration = () => {
+    return services.reduce((total, service) => {
+      return total + (service.durationMinutes || 60);
+    }, 0);
+  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -92,7 +99,7 @@ export default function BookingConfirmationScreen({ route, navigation }: Booking
     });
   };
 
-  const handleConfirmBooking = () => {
+  const handleConfirmBooking = async () => {
     Alert.alert(
       'Confirm Booking',
       'Are you sure you want to book this appointment? This will notify the stylist and reserve your time slot.',
@@ -100,9 +107,32 @@ export default function BookingConfirmationScreen({ route, navigation }: Booking
         { text: 'Back', style: 'cancel' },
         { 
           text: 'Confirm', 
-          onPress: () => {
-            setBookingConfirmed(true);
-            // Here you would normally make an API call to confirm the booking
+          onPress: async () => {
+            try {
+              setConfirming(true);
+              
+              const bookingRequest = {
+                stylistId,
+                services: selectedServices,
+                date: selectedDate,
+                time: selectedTime,
+                totalPrice: calculateTotal(),
+                notes: ''
+              };
+              
+              const response = await bookingService.createBooking(bookingRequest);
+              
+              if (response.success) {
+                setBookingConfirmed(true);
+              } else {
+                Alert.alert('Booking Failed', response.error || 'Unable to create booking. Please try again.');
+              }
+            } catch (error) {
+              console.error('Booking error:', error);
+              Alert.alert('Error', 'Failed to create booking. Please try again.');
+            } finally {
+              setConfirming(false);
+            }
           }
         }
       ]
@@ -110,20 +140,27 @@ export default function BookingConfirmationScreen({ route, navigation }: Booking
   };
 
   const handleCallStylist = () => {
-    Linking.openURL(`tel:${stylistData.phone}`);
+    if (stylist?.phone) {
+      Linking.openURL(`tel:${stylist.phone}`);
+    } else {
+      Alert.alert('Contact Info', 'Phone number not available');
+    }
   };
 
   const handleMessageStylist = () => {
-    navigation?.navigate('Chat', { 
+    const displayName = stylist?.businessName || stylist?.bio.split(' ').slice(0, 2).join(' ') || 'Stylist';
+    navigation.navigate('Chat', { 
       conversationId: stylistId,
-      stylistName: stylistData.name,
-      stylistAvatar: stylistData.avatar
+      stylistName: displayName,
+      stylistAvatar: stylist?.profileImage
     });
   };
 
   const handleShareBooking = () => {
+    const displayName = stylist?.businessName || stylist?.bio.split(' ').slice(0, 2).join(' ') || 'Stylist';
+    const serviceNames = services.map(s => s.name).join(', ');
     Share.share({
-      message: `I've booked a ${serviceName} appointment with ${stylistData.name} on ${formatDate(selectedDate)} at ${selectedTime}. Booking ID: ${bookingId}`,
+      message: `I've booked ${serviceNames} with ${displayName} on ${formatDate(selectedDate)} at ${selectedTime}. Booking ID: ${bookingId}`,
       title: 'Braidr Booking Confirmation'
     });
   };
@@ -198,14 +235,24 @@ export default function BookingConfirmationScreen({ route, navigation }: Booking
       <View style={styles.stylistCard}>
         <Text style={styles.cardTitle}>Your Stylist</Text>
         <View style={styles.stylistInfo}>
-          <Image source={{ uri: stylistData.avatar }} style={styles.stylistAvatar} />
+          {stylist?.profileImage ? (
+            <Image source={{ uri: stylist.profileImage }} style={styles.stylistAvatar} />
+          ) : (
+            <View style={[styles.stylistAvatar, styles.avatarPlaceholder]}>
+              <Text style={styles.avatarText}>
+                {(stylist?.businessName || stylist?.bio || 'S').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <View style={styles.stylistDetails}>
-            <Text style={styles.stylistName}>{stylistData.name}</Text>
+            <Text style={styles.stylistName}>
+              {stylist?.businessName || stylist?.bio.split(' ').slice(0, 2).join(' ') || 'Stylist'}
+            </Text>
             <View style={styles.stylistRating}>
               <Ionicons name="star" size={16} color="#FFD700" />
-              <Text style={styles.ratingText}>{stylistData.rating} ({stylistData.reviews} reviews)</Text>
+              <Text style={styles.ratingText}>{stylist?.rating || 5.0} ({stylist?.reviewCount || 0} reviews)</Text>
             </View>
-            <Text style={styles.stylistLocation}>{stylistData.location}</Text>
+            <Text style={styles.stylistLocation}>{stylist?.location || 'Location not specified'}</Text>
           </View>
         </View>
       </View>
@@ -266,24 +313,48 @@ export default function BookingConfirmationScreen({ route, navigation }: Booking
         
         {/* Stylist Info */}
         <View style={styles.stylistSummary}>
-          <Image source={{ uri: stylistData.avatar }} style={styles.stylistAvatar} />
+          {stylist?.profileImage ? (
+            <Image source={{ uri: stylist.profileImage }} style={styles.stylistAvatar} />
+          ) : (
+            <View style={[styles.stylistAvatar, styles.avatarPlaceholder]}>
+              <Text style={styles.avatarText}>
+                {(stylist?.businessName || stylist?.bio || 'S').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <View style={styles.stylistDetails}>
-            <Text style={styles.stylistName}>{stylistData.name}</Text>
+            <Text style={styles.stylistName}>
+              {stylist?.businessName || stylist?.bio.split(' ').slice(0, 2).join(' ') || 'Stylist'}
+            </Text>
             <View style={styles.stylistRating}>
               <Ionicons name="star" size={16} color="#FFD700" />
-              <Text style={styles.ratingText}>{stylistData.rating} ({stylistData.reviews} reviews)</Text>
+              <Text style={styles.ratingText}>{stylist?.rating || 5.0} ({stylist?.reviewCount || 0} reviews)</Text>
             </View>
           </View>
         </View>
 
-        {/* Service Details */}
-        <View style={styles.serviceDetails}>
-          <Image source={{ uri: service.image }} style={styles.serviceImage} />
-          <View style={styles.serviceInfo}>
-            <Text style={styles.serviceName}>{serviceName}</Text>
-            <Text style={styles.serviceDescription}>{service.description}</Text>
-            <Text style={styles.serviceDuration}>Duration: {serviceDuration}</Text>
-          </View>
+        {/* Services Details */}
+        <View style={styles.servicesContainer}>
+          {services.map((service, index) => {
+            const selectedService = selectedServices.find(s => s.serviceId === service.id);
+            return (
+              <View key={service.id} style={[styles.serviceDetails, index > 0 && { marginTop: 12 }]}>
+                <View style={styles.serviceImageContainer}>
+                  <Ionicons name="cut-outline" size={24} color="#4267FF" />
+                </View>
+                <View style={styles.serviceInfo}>
+                  <Text style={styles.serviceName}>{service.name}</Text>
+                  <Text style={styles.serviceDescription}>{service.description}</Text>
+                  <Text style={styles.serviceDuration}>Duration: {service.duration}</Text>
+                  {selectedService?.addOns && selectedService.addOns.length > 0 && (
+                    <Text style={styles.addOnsText}>
+                      Add-ons: {selectedService.addOns.join(', ')}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            );
+          })}
         </View>
       </View>
 
@@ -300,37 +371,35 @@ export default function BookingConfirmationScreen({ route, navigation }: Booking
 
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Location</Text>
-          <Text style={styles.detailValue}>{location}</Text>
+          <Text style={styles.detailValue}>{stylist?.location || 'To be confirmed'}</Text>
         </View>
 
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Contact</Text>
-          <Text style={styles.detailValue}>{contactNumber}</Text>
+          <Text style={styles.detailLabel}>Duration</Text>
+          <Text style={styles.detailValue}>
+            {Math.floor(calculateDuration() / 60)}h {calculateDuration() % 60}m
+          </Text>
         </View>
-
-        {specialRequests && (
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Special Requests</Text>
-            <Text style={styles.detailValue}>{specialRequests}</Text>
-          </View>
-        )}
       </View>
 
       {/* Pricing Breakdown */}
       <View style={styles.pricingCard}>
         <Text style={styles.cardTitle}>Pricing Breakdown</Text>
         
-        <View style={styles.pricingRow}>
-          <Text style={styles.pricingLabel}>{serviceName}</Text>
-          <Text style={styles.pricingValue}>${service.price}</Text>
-        </View>
-
-        {addOns.map(addOnId => {
-          const addOn = addOnsData[addOnId];
+        {services.map(service => {
+          const selectedService = selectedServices.find(s => s.serviceId === service.id);
           return (
-            <View key={addOnId} style={styles.pricingRow}>
-              <Text style={styles.pricingLabel}>{addOn.name}</Text>
-              <Text style={styles.pricingValue}>+${addOn.price}</Text>
+            <View key={service.id}>
+              <View style={styles.pricingRow}>
+                <Text style={styles.pricingLabel}>{service.name}</Text>
+                <Text style={styles.pricingValue}>${service.price}</Text>
+              </View>
+              {selectedService?.addOns?.map((addOn, index) => (
+                <View key={index} style={styles.pricingRow}>
+                  <Text style={styles.pricingLabel}>  + {addOn}</Text>
+                  <Text style={styles.pricingValue}>+$10</Text>
+                </View>
+              ))}
             </View>
           );
         })}
@@ -338,7 +407,7 @@ export default function BookingConfirmationScreen({ route, navigation }: Booking
         <View style={styles.pricingDivider} />
         <View style={styles.pricingRow}>
           <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalValue}>${totalPrice}</Text>
+          <Text style={styles.totalValue}>${calculateTotal()}</Text>
         </View>
         <Text style={styles.paymentNote}>Payment will be made directly to the stylist</Text>
       </View>
@@ -411,12 +480,22 @@ export default function BookingConfirmationScreen({ route, navigation }: Booking
       {/* Bottom Action */}
       <View style={[styles.bottomAction, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <View style={styles.finalTotal}>
-          <Text style={styles.finalTotalLabel}>Total: ${totalPrice}</Text>
+          <Text style={styles.finalTotalLabel}>Total: ${calculateTotal()}</Text>
           <Text style={styles.paymentMethod}>Pay in person</Text>
         </View>
-        <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmBooking}>
-          <Text style={styles.confirmButtonText}>Confirm Booking</Text>
-          <Ionicons name="checkmark" size={20} color="white" />
+        <TouchableOpacity 
+          style={[styles.confirmButton, confirming && styles.confirmButtonDisabled]} 
+          onPress={handleConfirmBooking}
+          disabled={confirming}
+        >
+          {confirming ? (
+            <ActivityIndicator size="small" color="white" />
+          ) : (
+            <>
+              <Text style={styles.confirmButtonText}>Confirm Booking</Text>
+              <Ionicons name="checkmark" size={20} color="white" />
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -618,11 +697,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  servicesContainer: {
+    gap: 12,
+  },
   serviceDetails: {
     flexDirection: 'row',
     backgroundColor: '#f8f9fa',
     borderRadius: 12,
     overflow: 'hidden',
+  },
+  serviceImageContainer: {
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(66, 103, 255, 0.1)',
   },
   serviceImage: {
     width: 80,
@@ -648,6 +737,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4267FF',
     fontWeight: '600',
+  },
+  addOnsText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#4267FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   appointmentInfo: {
     gap: 16,
@@ -842,6 +947,9 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '700',
+  },
+  confirmButtonDisabled: {
+    opacity: 0.7,
   },
   callButton: {
     flex: 1,

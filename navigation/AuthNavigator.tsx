@@ -53,7 +53,8 @@ export default function AuthNavigator() {
   };
 
   const handleSignUp = async (userData: {
-    fullName: string;
+    firstName: string;
+    lastName: string;
     email: string;
     password: string;
     role: 'customer' | 'stylist';

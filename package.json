@@ -26,6 +26,7 @@
     "expo": "^53.0.20",
     "expo-camera": "~16.1.11",
     "expo-linear-gradient": "~14.1.5",
+    "expo-location": "^18.1.6",
     "lucide-react-native": "0.526.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
@@ -40,7 +41,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
-    "@types/react": "~18.2.14",
+    "@types/react": "~19.0.10",
     "typescript": "^5.1.3"
   }
 }

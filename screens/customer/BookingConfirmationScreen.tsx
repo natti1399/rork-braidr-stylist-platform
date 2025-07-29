@@ -4,17 +4,17 @@ import {
   Text, 
   StyleSheet, 
   ScrollView, 
-  TouchableOpacity, 
   Image, 
   StatusBar,
   Alert,
   ActivityIndicator
 } from 'react-native';
+import { TouchableOpacity } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { bookingService, type Stylist, type Service } from '../../src/services/bookingService';
-import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 
 interface RouteParams {
   stylistId: string;
@@ -160,10 +160,19 @@ export default function BookingConfirmationScreen() {
       const serviceNames = services.map(s => s.name).join(', ');
       const message = `I've booked ${serviceNames} with ${displayName} on ${formatDate(selectedDate)} at ${selectedTime}. Booking ID: ${bookingId}`;
       
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync('data:text/plain;base64,' + btoa(message));
+      if (Platform.OS === 'web') {
+        // Web fallback - copy to clipboard or show alert
+        if (navigator.share) {
+          await navigator.share({
+            title: 'Booking Confirmation',
+            text: message
+          });
+        } else {
+          Alert.alert('Booking Details', message);
+        }
       } else {
-        Alert.alert('Share', message);
+        // For mobile, show alert as fallback since expo-sharing is not available
+        Alert.alert('Booking Details', message);
       }
     } catch (error) {
       Alert.alert('Share', 'Unable to share booking details.');

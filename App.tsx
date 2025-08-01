@@ -198,6 +198,7 @@ function RootStackNavigator() {
         setNeedsOnboarding(onboardingStatus === 'true');
       } catch (error) {
         console.error('Error checking onboarding status:', error);
+        setNeedsOnboarding(false);
       }
     } else {
       console.log('App - no user, clearing onboarding status');

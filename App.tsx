@@ -194,21 +194,33 @@ function RootStackNavigator() {
     if (user) {
       try {
         const onboardingStatus = await AsyncStorage.getItem('needsOnboarding');
+        console.log('App - checking onboarding status for user:', user.email, 'status:', onboardingStatus);
         setNeedsOnboarding(onboardingStatus === 'true');
       } catch (error) {
         console.error('Error checking onboarding status:', error);
       }
+    } else {
+      console.log('App - no user, clearing onboarding status');
+      setNeedsOnboarding(false);
     }
   };
 
   if (isLoading) {
+    console.log('App - showing loading screen');
     return <LoadingScreen />;
   }
 
-  if (!isAuthenticated || needsOnboarding) {
+  if (!isAuthenticated) {
+    console.log('App - user not authenticated, showing AuthNavigator');
     return <AuthNavigator />;
   }
 
+  if (needsOnboarding) {
+    console.log('App - user needs onboarding, showing AuthNavigator');
+    return <AuthNavigator />;
+  }
+
+  console.log('App - user authenticated and onboarded, showing main app for role:', user?.role);
   return user?.role === 'stylist' ? <StylistStackNavigator /> : <CustomerStackNavigator />;
 }
 

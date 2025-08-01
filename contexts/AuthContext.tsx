@@ -209,6 +209,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }) => {
     setIsLoading(true);
     try {
+      console.log('Starting signup process for:', userData.email, userData.role);
+      
       // Sign up with Supabase Auth
       const { data, error } = await supabase.auth.signUp({
         email: userData.email,
@@ -216,10 +218,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
       
       if (error) {
+        console.error('Supabase auth signup error:', error);
         throw new Error(error.message);
       }
       
       if (data.user) {
+        console.log('Supabase user created:', data.user.id);
+        
         // Create user profile in our users table
         const { data: userProfile, error: profileError } = await supabase
           .from('users')
@@ -237,8 +242,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           .single();
         
         if (profileError) {
+          console.error('Profile creation error:', profileError);
           throw new Error('Failed to create user profile');
         }
+        
+        console.log('User profile created:', userProfile);
         
         const newUser: AuthUser = {
           id: userProfile.id,
@@ -254,7 +262,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         await AsyncStorage.setItem('user', JSON.stringify(newUser));
         await AsyncStorage.setItem('needsOnboarding', 'true');
+        console.log('User data saved to AsyncStorage, needsOnboarding set to true');
+        
         setUser(newUser);
+        console.log('User state updated:', newUser.email, newUser.role);
       }
     } catch (error) {
       console.error('Sign up error:', error);

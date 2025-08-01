@@ -21,23 +21,27 @@ export type AuthStackParamList = {
 const Stack = createStackNavigator<AuthStackParamList>();
 
 export default function AuthNavigator() {
-  const { signIn, signUp, completeOnboarding } = useAuth();
+  const { signIn, signUp, completeOnboarding, user, isAuthenticated } = useAuth();
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [userRole, setUserRole] = useState<'customer' | 'stylist' | null>(null);
 
   useEffect(() => {
     checkOnboardingStatus();
-  }, []);
+  }, [user, isAuthenticated]);
 
   const checkOnboardingStatus = async () => {
     try {
       const onboardingStatus = await AsyncStorage.getItem('needsOnboarding');
-      const userData = await AsyncStorage.getItem('user');
+      console.log('AuthNavigator - checking onboarding status:', onboardingStatus, 'user:', user?.email, user?.role);
       
-      if (onboardingStatus === 'true' && userData) {
-        const user = JSON.parse(userData);
+      if (onboardingStatus === 'true' && user) {
+        console.log('AuthNavigator - setting up onboarding for user:', user.role);
         setUserRole(user.role);
         setNeedsOnboarding(true);
+      } else {
+        console.log('AuthNavigator - no onboarding needed');
+        setNeedsOnboarding(false);
+        setUserRole(null);
       }
     } catch (error) {
       console.error('Error checking onboarding status:', error);
@@ -59,9 +63,14 @@ export default function AuthNavigator() {
     password: string;
     role: 'customer' | 'stylist';
   }) => {
-    await signUp(userData);
-    setNeedsOnboarding(true);
-    setUserRole(userData.role);
+    try {
+      await signUp(userData);
+      // The useEffect will handle setting needsOnboarding and userRole
+      // based on the updated user state and AsyncStorage
+    } catch (error) {
+      console.error('Sign up error in navigator:', error);
+      throw error;
+    }
   };
 
   const handleCompleteOnboarding = async () => {
@@ -72,6 +81,7 @@ export default function AuthNavigator() {
 
   // If user needs onboarding, show onboarding screen
   if (needsOnboarding && userRole) {
+    console.log('AuthNavigator - showing onboarding screen for role:', userRole);
     return (
       <OnboardingScreen
         role={userRole}
@@ -80,6 +90,8 @@ export default function AuthNavigator() {
       />
     );
   }
+
+  console.log('AuthNavigator - showing auth stack, needsOnboarding:', needsOnboarding, 'userRole:', userRole);
 
   return (
     <Stack.Navigator

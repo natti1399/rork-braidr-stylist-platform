@@ -21,5 +21,5 @@ export const trpcClient = trpc.createClient({
       url: `${getBaseUrl()}/api/trpc`,
     }),
   ],
-  transformer: superjson,
+  // transformer: superjson, // Removed due to type error in current tRPC version
 });

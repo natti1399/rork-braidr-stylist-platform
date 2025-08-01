@@ -64,7 +64,7 @@ const Stack = createStackNavigator();
 function StylistTabNavigator() {
   return (
     <Tab.Navigator
-      id={undefined}
+      
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap;
@@ -100,7 +100,7 @@ function StylistTabNavigator() {
 // Stylist Stack Navigator (includes sub-screens)
 function StylistStackNavigator() {
   return (
-    <Stack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
+    <Stack.Navigator  screenOptions={{ headerShown: false }}>
       <Stack.Screen name="StylistTabs" component={StylistTabNavigator} />
       
       {/* Stylist Management Screens */}
@@ -119,7 +119,7 @@ function StylistStackNavigator() {
 function CustomerTabNavigator() {
   return (
     <Tab.Navigator
-      id={undefined}
+      
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap;
@@ -158,7 +158,7 @@ function CustomerTabNavigator() {
 // Customer Stack Navigator (includes sub-screens)
 function CustomerStackNavigator() {
   return (
-    <Stack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
+    <Stack.Navigator  screenOptions={{ headerShown: false }}>
       <Stack.Screen name="CustomerTabs" component={CustomerTabNavigator} />
       
       {/* Profile Sub-screens */}

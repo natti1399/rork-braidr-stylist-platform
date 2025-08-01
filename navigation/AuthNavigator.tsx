@@ -29,6 +29,11 @@ export default function AuthNavigator() {
     checkOnboardingStatus();
   }, [user, isAuthenticated]);
 
+  // Also check when the component mounts
+  useEffect(() => {
+    checkOnboardingStatus();
+  }, []);
+
   const checkOnboardingStatus = async () => {
     try {
       const onboardingStatus = await AsyncStorage.getItem('needsOnboarding');
@@ -64,6 +69,7 @@ export default function AuthNavigator() {
     role: 'customer' | 'stylist';
   }) => {
     try {
+      console.log('AuthNavigator - starting signup for:', userData.email, userData.role);
       await signUp(userData);
       console.log('AuthNavigator - signup successful, setting up onboarding');
       // After successful signup, set the user role and trigger onboarding
@@ -97,7 +103,6 @@ export default function AuthNavigator() {
 
   return (
     <Stack.Navigator
-      id="auth-stack"
       screenOptions={{
         headerShown: false,
         cardStyle: { backgroundColor: '#FFFFFF' },

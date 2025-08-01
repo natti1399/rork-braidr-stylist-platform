@@ -65,8 +65,10 @@ export default function AuthNavigator() {
   }) => {
     try {
       await signUp(userData);
-      // The useEffect will handle setting needsOnboarding and userRole
-      // based on the updated user state and AsyncStorage
+      console.log('AuthNavigator - signup successful, setting up onboarding');
+      // After successful signup, set the user role and trigger onboarding
+      setUserRole(userData.role);
+      setNeedsOnboarding(true);
     } catch (error) {
       console.error('Sign up error in navigator:', error);
       throw error;
@@ -95,6 +97,7 @@ export default function AuthNavigator() {
 
   return (
     <Stack.Navigator
+      id={undefined}
       screenOptions={{
         headerShown: false,
         cardStyle: { backgroundColor: '#FFFFFF' },
